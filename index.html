@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ค่าอินเทอร์เน็ต 3BB: สถานะรายเดือน</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="style.css">
+  <!-- อ่านไฟล์ Excel (data.xlsx) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- ===================== หน้าจอหลัก ===================== -->
+  <div class="wrap">
+    <h1>🧾 ค่าอินเทอร์เน็ต 3BB: ค้นหาศูนย์และดูสถานะรายเดือน</h1>
+
+    <!-- บทบาท: ผู้อนุมัติ 1 / ผู้อนุมัติ 2 / บัญชี -->
+    <div class="card login">
+      <div id="loginBox">
+        <label>เข้าสู่ระบบตามบทบาท (ไม่บังคับ ถ้าแค่ค้นหาและพิมพ์ใบเบิก)</label>
+        <div class="search-row">
+          <select id="roleSel"><option value="">-- เลือกบทบาท --</option></select>
+          <input id="pinIn" type="password" inputmode="numeric" placeholder="รหัส PIN">
+          <button id="loginBtn">เข้าสู่ระบบ</button>
+        </div>
+      </div>
+      <div id="whoBox" class="who" style="display:none;">
+        <span>เข้าสู่ระบบเป็น <b id="whoName"></b></span>
+        <button id="logoutBtn" class="alt">ออกจากระบบ</button>
+      </div>
+    </div>
+
+    <!-- ส่วนที่ 1: เลือกเรื่อง และเลือกรายชื่อ (หรือพิมพ์ค้นหา) -->
+    <div class="card">
+      <label>เลือกเรื่องที่จะเบิก</label>
+      <select id="kindSel" class="pick">
+        <option value="net">ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB</option>
+        <option value="phone">ขอเบิกค่าใช้บริการโทรศัพท์</option>
+      </select>
+
+      <label id="itemLabel">เลือกรายชื่อ</label>
+      <select id="itemSel" class="pick"></select>
+
+      <div class="or-line">หรือพิมพ์ค้นหา</div>
+
+      <div id="searchNet">
+        <div class="search-row">
+          <input id="accIn" inputmode="numeric" placeholder="รหัสลูกค้า เช่น 410443826">
+          <button id="accBtn" class="alt">ค้นหา</button>
+        </div>
+        <div class="search-row">
+          <input id="svcIn" placeholder="หมายเลขบริการ เช่น A212119700542">
+          <button id="svcBtn" class="alt">ค้นหา</button>
+        </div>
+      </div>
+
+      <div id="searchPhone">
+        <div class="search-row">
+          <input id="telIn" inputmode="tel" placeholder="หมายเลขโทรศัพท์ เช่น 097-3378822">
+          <button id="telBtn" class="alt">ค้นหา</button>
+        </div>
+      </div>
+
+      <div id="msg"></div>
+    </div>
+
+    <!-- ส่วนที่ 2: ผลลัพธ์ (ซ่อนจนกว่าจะค้นหาเจอ) -->
+    <div id="result" class="card">
+      <div class="center-head">
+        <span id="cName" class="center-name"></span>
+        <span id="cBadge"></span>
+      </div>
+      <div id="cMeta" class="center-meta"></div>
+      <div id="cBanner"></div>
+
+      <!-- ใบแจ้งค่าบริการ (เฉพาะโทรศัพท์) แสดงก่อนสถานะรายเดือน -->
+      <div id="billBox" class="bill"></div>
+
+      <div class="sec-title">สถานะการชำระรายเดือน (จาก Excel)</div>
+      <div id="mGrid" class="mgrid"></div>
+      <div id="mHint" class="m-hint"></div>
+
+      <!-- รายละเอียดของเดือนที่เลือก + พิมพ์ใบเบิก -->
+      <div id="detail">
+        <div id="tTitle" class="ttl"></div>
+
+        <div class="tw">
+          <table class="tb">
+            <thead>
+              <tr id="tHead"></tr>
+            </thead>
+            <tbody>
+              <tr id="tRow" class="hl"></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <label>รอบเดือน</label>
+        <input id="period">
+        <label>ผู้จัดทำ</label>
+        <select id="makerSel" class="pick"></select>
+        <div id="makerPosTxt" class="pos-txt"></div>
+        <label>ผู้อนุมัติ</label>
+        <select id="apprSel" class="pick"></select>
+        <div id="apprPosTxt" class="pos-txt"></div>
+        <label>วันที่ในบันทึกภายใน</label>
+        <input id="memoDate" type="date">
+
+        <div class="appr-panel">
+          <div class="appr-title">สถานะการอนุมัติ (ผู้อนุมัติ 2 คน + บัญชี)</div>
+          <div id="apprGrid"></div>
+          <div id="apprActions"></div>
+        </div>
+
+        <button id="printMemo" class="btn-print">🖨️ Print บันทึกภายใน</button>
+        <button id="printBtn" class="btn-print alt">🖨️ Print รายงานการขอเบิกค่าใช้จ่าย (แบบเดิม)</button>
+      </div>
+    </div>
+
+    <div class="note">
+      ข้อมูลอ่านจากไฟล์ Excel: data.xlsx (อินเตอร์เน็ต 3BB) และ phone.xlsx (โทรศัพท์) · แก้ไขใน Excel แล้วอัปโหลดทับ เว็บจะแสดงข้อมูลใหม่ให้อัตโนมัติ
+    </div>
+  </div>
+
+  <!-- ===================== ใบรายงานการขอเบิกค่าใช้จ่าย (ใช้พิมพ์) ===================== -->
+  <div id="form">
+    <div class="pf">
+
+      <!-- หัวใบ -->
+      <div class="pf-head">
+        <div class="pf-head-l">
+          <div class="pf-title">รายงานการขอเบิกค่าใช้จ่าย</div>
+          <div class="pf-period">ประจำรอบเดือน <span id="fPeriod"></span></div>
+          <div class="pf-term">งวดที่ <span class="cb"></span> 1-15 <span class="cb cb2"></span> 16-31</div>
+        </div>
+        <div class="pf-head-r">
+          <img class="pf-logo" src="logo.png" alt="KI">
+          <div class="pf-co">บริษัท น้ำตาลสุรินทร์ จำกัด</div>
+        </div>
+      </div>
+
+      <div class="pf-dept">ฝ่ายจัดหาวัตถุดิบ</div>
+
+      <!-- สำนักงาน -->
+      <div class="pf-cols pf-h"><div><u>สำนักงาน</u></div><div></div></div>
+      <div class="pf-cols pf-r">
+        <div class="sp"><span>ค่าอินเทอร์เน็ต<span id="fName"></span> (3BB)</span><span><span id="fAmt"></span> บาท</span></div>
+        <div>ค่าอินเทอร์เน็ต บาท</div>
+      </div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์บาท</div></div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์บาท</div></div>
+      <div class="pf-cols pf-r"><div>ค่าอินเทอร์เน็ต บาท</div><div>ค่าอินเทอร์เน็ตศูนย์ บาท</div></div>
+
+      <!-- วัสดุ/อุปกรณ์ และ ค่าซ่อมแซม -->
+      <div class="pf-cols pf-h"><div><u>วัสดุ/อุปกรณ์ สนง.</u></div><div><u>ค่าซ่อมแซม</u></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า วัสดุสำนักงาน</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่าซ่อมแซม</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่า</span><span>บาท</span></div></div>
+      <div class="pf-cols pf-r2"><div class="sp"><span>ค่า</span><span>บาท</span></div><div class="sp"><span>ค่า</span><span>บาท</span></div></div>
+
+      <!-- รถยนต์ -->
+      <div class="pf-cols pf-car">
+        <div class="car-l"><u>รถยนต์</u><span class="car-b">บาท</span></div>
+        <div></div>
+      </div>
+
+      <!-- รวม -->
+      <div class="pf-total">รวมขอเบิกค่าใช้จ่ายทั้งหมด &nbsp;<span id="fAmt2"></span>&nbsp; บาท (<span id="fWords"></span>)</div>
+
+      <!-- ลายเซ็น (เซ็นด้วยมือ) -->
+      <div class="pf-sig">
+        <div class="sg">
+          <div class="sg-line"><span>ลงชื่อ</span><i></i><span>ผู้จัดทำ</span></div>
+          <div id="fMaker"></div>
+          <div id="fMakerPos"></div>
+        </div>
+        <div class="sg">
+          <div class="sg-line"><span>ลงชื่อ</span><i></i><span>ผู้อนุมัติ</span></div>
+          <div id="fAppr"></div>
+          <div id="fApprPos"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== บันทึกภายใน (ใช้พิมพ์) ===================== -->
+  <div id="memo">
+    <div class="mm-head">
+      <div class="mm-title"><b>บันทึกภายใน</b><span>หน้า&nbsp; 1&nbsp;&nbsp; ต่อ&nbsp;&nbsp; จบ</span></div>
+      <div class="mm-logo"><img src="logo.png" alt="KI"><div class="mm-co">บริษัท น้ำตาลสุรินทร์ จำกัด</div></div>
+
+      <div class="mm-l mm-r2 mm-c1">วันที่</div>
+      <div class="mm-v mm-r2 mm-date" id="mDate"></div>
+
+      <div class="mm-l mm-r3 mm-c1">เรื่อง</div>
+      <div class="mm-v mm-r3 mm-c2" id="mSubject"></div>
+      <div class="mm-l mm-r3 mm-c3">จาก</div>
+      <div class="mm-v mm-r3 mm-c4" id="mFrom"></div>
+
+      <div class="mm-l mm-r4 mm-c1">เรียน</div>
+      <div class="mm-v mm-r4 mm-c2" id="mTo"></div>
+      <div class="mm-l mm-r4 mm-c3">เพื่อ</div>
+      <div class="mm-v mm-r4 mm-c4" id="mFor"></div>
+    </div>
+
+    <div class="mm-body">
+      <p class="mm-p" id="mIntro"></p>
+
+      <table class="mm-tb" id="mmTb"></table>
+
+      <p class="mm-p" id="mPara"></p>
+      <p class="mm-p" id="mClose"></p>
+
+      <div class="mm-sig">
+        <div class="mm-sg">
+          <div class="mm-sg-line"><span>ผู้ขออนุมัติ</span><i></i></div>
+          <div id="mMaker"></div>
+          <div id="mMakerPos"></div>
+        </div>
+        <div class="mm-sg">
+          <div class="mm-sg-line"><span>ผู้อนุมัติ</span><i></i></div>
+          <div id="mAppr"></div>
+          <div id="mApprPos"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mm-foot" id="mFoot"></div>
+  </div>
+
+<script>
+/* =========================================================
+   1. ตัวช่วยทั่วไป
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const setMsg = text => { $("msg").textContent = text; };
+const pad2 = n => String(n).padStart(2, "0");
+const fmt = n => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const text = v => String(v == null ? "" : v).trim();
+const norm = s => text(s).toUpperCase().replace(/\s/g, "");
+const digits = s => text(s).replace(/\D/g, "");
+
+// รหัส/หมายเลข: ถ้า Excel เก็บเป็นตัวเลข ให้แปลงกลับเป็นข้อความเต็ม ๆ
+function normCode(v) {
+  return typeof v === "number" ? String(Math.round(v)) : text(v);
+}
+
+// วันที่: รับ 04/11/2569, 04/11/2026 และเลขวันที่ของ Excel -> dd/mm/ปีพ.ศ.
+function normDate(v) {
+  if (typeof v === "number") {
+    const d = new Date(Math.round((v - 25569) * 86400000));
+    let y = d.getUTCFullYear();
+    if (y < 2400) y += 543;
+    return pad2(d.getUTCDate()) + "/" + pad2(d.getUTCMonth() + 1) + "/" + y;
+  }
+  const s = text(v);
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return s;
+  let y = +m[3];
+  if (y < 2400) y += 543;
+  return pad2(m[1]) + "/" + pad2(m[2]) + "/" + y;
+}
+
+// รอบค่าบริการ (เช่น 12/10/69-11/11/69) -> รอบเดือนบนใบเบิก (ค.ศ.) 12/10/2026 – 11/11/2026
+function periodToForm(p, due) {
+  const m = text(p).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*[-–]\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    const gy = y => { y = +y; if (y < 100) y += 2500; if (y >= 2400) y -= 543; return y; };
+    return pad2(m[1]) + "/" + pad2(m[2]) + "/" + gy(m[3]) + " – " + pad2(m[4]) + "/" + pad2(m[5]) + "/" + gy(m[6]);
+  }
+  if (!due) return "";
+  const [d, mo, y] = due.split("/").map(Number);                 // ไม่มีรอบในไฟล์: ย้อนจากวันกำหนดชำระ 1 เดือน
+  const s = new Date(y - 543, mo - 2, d), e = new Date(y - 543, mo - 1, d - 1);
+  const f = t => pad2(t.getDate()) + "/" + pad2(t.getMonth() + 1) + "/" + t.getFullYear();
+  return f(s) + " – " + f(e);
+}
+
+/* =========================================================
+   2. เรื่องที่เบิก (อินเตอร์เน็ต 3BB / โทรศัพท์) และการอ่านข้อมูลจาก Excel
+   โครงไฟล์: แถวหัวตารางมีคอลัมน์ "ลำดับ" ตามด้วยคอลัมน์ระบุตัว แล้วต่อด้วยกลุ่มเดือน
+   แต่ละเดือน: ค่าบริการ (หรือ จำนวน) | กำหนดชำระ | รอบค่าบริการ (ไม่มีก็ได้)
+   - ช่องค่าบริการมีตัวเลข = จ่ายแล้ว   - ช่องว่าง = ยังไม่จ่าย   - ช่องมีคำว่า "ย้ายศูนย์" = ย้ายศูนย์
+   ========================================================= */
+const KINDS = {
+  net: {
+    label: "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB",
+    file: "data.xlsx",
+    pickLabel: n => "เลือกศูนย์ (" + n + " รายชื่อ)",
+    cols: { name: "ชื่อ", key1: "หมายเลขบริการ", key2: "รหัสลูกค้า", extra: "" },
+    option: it => it.no + ". " + it.name,
+    heading: it => it.name,
+    meta: it => "หมายเลขบริการ " + it.key1 + " · รหัสลูกค้า " + it.key2,
+    head: ["ลำดับ", "ชื่อ", "หมายเลขบริการ", "รหัสลูกค้า", "ค่าบริการ", "กำหนดชำระ", "รอบค่าบริการ"],
+    row: (c, amt) => [c.no, c.name, c.key1, c.key2, amt, c.due, c.period || "—"],
+    title: (c) => "อินเทอร์เน็ต 3BB " + c.name + " (วันที่กำหนดชำระ " + c.due + ")",
+    memo: {
+      word: "อินเตอร์เน็ต",
+      subject: c => "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB<br>(" + esc(c.name) + ")",
+      purpose: "โปรดพิจารณา",
+      intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการอินเตอร์เน็ตเพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+      close: "จึงเรียนมาเพื่อโปรดพิจารณา",
+      tableTitle: "ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ",
+      cols: ["ลำดับ", "รหัสลูกค้า", "ผู้ใช้บริการ", "จำนวน", "กำหนดชำระ"],
+      widths: [9, 20, 30, 16, 25],
+      monthSpan: 1,
+      total: true,
+      cells: (c, amt) => ["1", c.key2, c.name, amt, c.due]
+    }
+  },
+  phone: {
+    label: "ขอเบิกค่าใช้บริการโทรศัพท์",
+    file: "phone.xlsx",
+    pickLabel: n => "เลือกหมายเลขโทรศัพท์ (" + n + " เบอร์)",
+    cols: { name: "ผู้ใช้บริการ", key1: "หมายเลขโทรศัพท์", key2: "", extra: "ระบบ", phone: true },
+    option: it => it.key1 + " · " + it.name,
+    heading: it => it.key1 + " · " + it.name,
+    meta: it => "หมายเลขโทรศัพท์ " + it.key1 + (it.extra ? " · ระบบ " + it.extra : ""),
+    head: ["ลำดับ", "หมายเลขโทรศัพท์", "ระบบ", "ผู้ใช้บริการ", "ค่าบริการ", "กำหนดชำระ", "รอบค่าบริการ"],
+    row: (c, amt) => [c.no, c.key1, c.extra, c.name, amt, c.due, c.period || "—"],
+    title: (c) => "โทรศัพท์ " + c.key1 + " " + c.name + " (วันที่กำหนดชำระ " + c.due + ")",
+    memo: {
+      word: "โทรศัพท์",
+      subject: c => "ขอเบิกค่าใช้บริการโทรศัพท์",
+      purpose: "โปรดพิจารณาดำเนินการ",
+      intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการหมายเลขโทรศัพท์เพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+      close: "จึงเรียนมาเพื่อโปรดพิจารณาดำเนินการ",
+      tableTitle: "ตารางค่าใช้จ่ายโทรศัพท์เคลื่อนที่ของบริษัทฯ",
+      cols: ["ลำดับ", "หมายเลขโทรศัพท์", "ระบบ", "ผู้ใช้บริการ", "จำนวน", "กำหนดชำระ"],
+      widths: [11.5, 20.6, 12.6, 25.2, 13.2, 16.9],
+      monthSpan: 2,
+      total: false,
+      cells: (c, amt) => ["1", c.key1, c.extra, c.name, amt, c.due]
+    }
+  }
+};
+
+const DATA = { net: null, phone: null };    // ข้อมูลที่โหลดแล้วของแต่ละเรื่อง (null = ยังไม่โหลด)
+let kind = "net";
+const K = () => KINDS[kind];
+const ITEMS = () => DATA[kind] || [];
+
+function parseSheet(rows, cols) {
+  const h = rows.findIndex(r => text(r[0]) === "ลำดับ");
+  if (h < 0) throw new Error("ไม่พบแถวหัวตาราง (คอลัมน์ A ต้องมีคำว่า ลำดับ)");
+  const top = rows[h], sub = rows[h + 1] || [];
+  const find = name => name ? top.findIndex(c => text(c) === name) : -1;
+  const cName = find(cols.name), cK1 = find(cols.key1), cK2 = find(cols.key2), cEx = find(cols.extra);
+  if (cName < 0 || cK1 < 0) throw new Error("ไม่พบคอลัมน์ '" + cols.name + "' หรือ '" + cols.key1 + "' ในหัวตาราง");
+
+  // กลุ่มเดือน: เริ่มทุกครั้งที่หัวย่อยเป็น "ค่าบริการ" หรือ "จำนวน"
+  // (ชื่อเดือนอยู่ในหัวตารางแถวบน เซลล์ที่ผสานจะมีค่าเฉพาะช่องแรก)
+  const width = Math.max(top.length, sub.length);
+  const starts = [];
+  for (let c = 0; c < width; c++) if (["ค่าบริการ", "จำนวน"].includes(text(sub[c]))) starts.push(c);
+  if (!starts.length) throw new Error("ไม่พบช่อง 'ค่าบริการ' ของแต่ละเดือน");
+  let month = "";
+  const groups = starts.map((s, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : width;
+    month = text(top[s]) || month;
+    let due = s + 1, per = -1;
+    for (let c = s + 1; c < end; c++) {
+      const t = text(sub[c]);
+      if (t === "กำหนดชำระ") due = c;
+      else if (t.startsWith("รอบ")) per = c;
+    }
+    return { month, amt: s, due, per };
+  });
+
+  const out = [];
+  for (const r of rows.slice(h + 2)) {
+    let key1 = normCode(r[cK1]);
+    if (cols.phone && /^\d{9}$/.test(key1)) key1 = "0" + key1;          // Excel ตัดเลข 0 ข้างหน้าเบอร์
+    const key2 = cK2 >= 0 ? normCode(r[cK2]) : "";
+    if (!key1 && !key2) continue;
+    const months = groups.map(g => {
+      const perV = g.per >= 0 ? r[g.per] : "";
+      const isMoved = [r[g.amt], r[g.due], perV].some(v => /ย้าย/.test(text(v)));
+      const amt = typeof r[g.amt] === "number" ? r[g.amt] : parseFloat(text(r[g.amt]).replace(/,/g, ""));
+      const paid = !isMoved && isFinite(amt) && amt > 0;
+      return {
+        name: g.month,
+        amt: paid ? amt : null,
+        due: isMoved ? "" : normDate(r[g.due]),
+        period: isMoved ? "" : text(perV),
+        status: isMoved ? "moved" : paid ? "paid" : "unpaid"
+      };
+    });
+    const moved = months.some(m => m.status === "moved");
+    if (moved) months.forEach(m => { if (m.status === "unpaid") m.status = "moved"; });   // ย้ายศูนย์แล้ว เดือนที่ว่างไม่ใช่ค้างจ่าย
+    out.push({ no: text(r[0]), name: text(r[cName]), key1, key2, extra: cEx >= 0 ? text(r[cEx]) : "", moved, months });
+  }
+  return out;
+}
+
+async function ensureLoaded(k) {
+  if (DATA[k]) return;
+  const cfg = KINDS[k];
+  try {
+    const res = await fetch(cfg.file + "?" + Date.now());
+    if (!res.ok) throw new Error("ไม่พบไฟล์ " + cfg.file + " (" + res.status + ")");
+    const wb = XLSX.read(await res.arrayBuffer(), { type: "array" });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+    DATA[k] = parseSheet(rows, cfg.cols);
+    if (k === "phone") parseBills(wb);
+    if (!DATA[k].length) throw new Error("ไม่พบข้อมูลในไฟล์ " + cfg.file);
+  } catch (e) {
+    DATA[k] = [];
+    setMsg("โหลดข้อมูลไม่ได้: " + (e && e.message || "error"));
+  }
+}
+
+/* =========================================================
+   3. เลือก/ค้นหา และแสดงสถานะรายเดือน
+   ========================================================= */
+let center = null;    // รายการที่แสดงอยู่ (ศูนย์ หรือ เบอร์โทร)
+let current = null;   // เดือนที่เลือกสำหรับพิมพ์ใบเบิก (ใช้ร่วมกับส่วนอนุมัติและพิมพ์)
+
+const STATUS = {
+  paid:   { chip: "paid",   label: "✅ จ่ายแล้ว" },
+  unpaid: { chip: "unpaid", label: "⏳ ยังไม่จ่าย" },
+  moved:  { chip: "moved",  label: "🚚 ย้ายศูนย์" }
+};
+
+function show(c) {
+  center = c;
+  const idx = ITEMS().indexOf(c);
+  $("itemSel").value = idx >= 0 ? String(idx) : "";
+  $("result").style.display = "block";
+  $("cName").textContent = K().heading(c);
+  $("cBadge").innerHTML = c.moved ? '<span class="badge moved">🚚 ย้ายศูนย์</span>' : "";
+  $("cMeta").textContent = K().meta(c);
+  $("cBanner").innerHTML = c.moved
+    ? '<div class="banner">🚚 รายการนี้ย้ายศูนย์แล้ว (ตามไฟล์ Excel) จึงไม่มียอดค่าบริการให้เบิกในเดือนที่ระบุ</div>'
+    : "";
+  let sel = -1;                                          // เริ่มต้น: เดือนล่าสุดที่มียอด
+  c.months.forEach((m, i) => { if (m.status === "paid") sel = i; });
+  renderMonths(sel);
+  $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+/* ---------- ใบแจ้งค่าบริการโทรศัพท์ (ชีต "รายละเอียดบิล" ใน phone.xlsx) ---------- */
+const BILLS = {};    // "เบอร์(เฉพาะตัวเลข)|เดือน" -> รายการแถวของใบแจ้ง
+
+function parseBills(wb) {
+  const name = wb.SheetNames.find(n => n.includes("รายละเอียด"));
+  if (!name) return;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: "" });
+  const h = rows.findIndex(r => text(r[0]) === "หมายเลขโทรศัพท์");
+  if (h < 0) return;
+  for (const r of rows.slice(h + 1)) {
+    const ph = digits(r[0]), mo = text(r[1]), type = text(r[2]);
+    if (!ph || !mo || !type) continue;
+    const key = ph + "|" + mo;
+    if (!BILLS[key]) BILLS[key] = [];
+    BILLS[key].push({ type, label: text(r[3]), qty: text(r[4]), amt: r[5] });
+  }
+}
+
+const amtText = v => typeof v === "number" ? fmt(v) : text(v);
+
+function billRow(r) {
+  const l = esc(r.label), a = esc(amtText(r.amt)), q = esc(r.qty);
+  switch (r.type) {
+    case "รวม":        return '<div class="b-bar"><span>' + l + "</span><span>" + a + "</span></div>";
+    case "ยอดรวม":     return '<div class="b-bar big"><span>' + l + "</span><span>" + a + "</span></div>";
+    case "หัวข้อ":     return '<div class="b-head">' + l + "</div>";
+    case "หัวข้อย่อย": return '<div class="b-sub">' + l + "</div>";
+    case "ตาราง":      return '<div class="b-th">' + l + "</div>";
+    case "รายการ":     return '<div class="b-item"><span>' + l + '</span><span class="q">' + q + '</span><span class="a">' + a + "</span></div>";
+    case "รวมย่อย":    return '<div class="b-item b-subtotal"><span>' + l + '</span><span></span><span class="a">' + a + "</span></div>";
+    default:           return '<div class="b-line"><span>' + l + "</span><span>" + a + "</span></div>";
+  }
+}
+
+function renderBill() {
+  const box = $("billBox");
+  if (kind !== "phone" || !center) { box.style.display = "none"; return; }
+  const month = current ? current.month : "";
+  const rows = month ? BILLS[digits(center.key1) + "|" + month] : null;
+  let h = '<div class="bill-title">🧾 ใบแจ้งค่าบริการโทรศัพท์' + (month ? " · เดือน " + esc(month) : "") + "</div>";
+  if (!rows) {
+    h += '<div class="m-hint">ยังไม่มีรายละเอียดใบแจ้งค่าบริการของเดือนนี้ในไฟล์ phone.xlsx (ชีต "รายละเอียดบิล")</div>';
+  } else {
+    h += rows.map(billRow).join("");
+    const total = rows.find(r => r.type === "ยอดรวม" && typeof r.amt === "number");
+    if (total && current && Math.abs(total.amt - current.amt) > 0.005) {
+      h += '<div class="banner warn">⚠️ ยอดรวมในใบแจ้ง (' + fmt(total.amt) + ") ไม่ตรงกับยอดในตารางข้อมูล (" + fmt(current.amt) + ") ตรวจสอบไฟล์ Excel อีกครั้ง</div>";
+    }
+  }
+  box.innerHTML = h;
+  box.style.display = "block";
+}
+
+function renderMonths(sel) {
+  const grid = $("mGrid");
+  grid.innerHTML = "";
+  center.months.forEach((m, i) => {
+    const st = STATUS[m.status];
+    const printable = m.status === "paid";
+    const el = document.createElement(printable ? "button" : "div");
+    el.className = "mcard" + (printable ? "" : " off") + (i === sel ? " sel" : "");
+    el.innerHTML =
+      '<div class="m-name">' + esc(m.name) + "</div>" +
+      '<span class="chip ' + st.chip + '">' + st.label + "</span>" +
+      '<div class="m-amt">' + (m.amt != null ? fmt(m.amt) + " ฿" : "—") + "</div>" +
+      '<div class="m-sub">กำหนดชำระ ' + esc(m.due || "—") + "</div>" +
+      '<div class="m-sub">รอบ ' + esc(m.period || "—") + "</div>" +
+      (i === sel ? '<div class="m-pick">✓ เลือกพิมพ์ใบเบิกเดือนนี้</div>' : "");
+    if (printable) el.onclick = () => renderMonths(i);
+    grid.appendChild(el);
+  });
+  $("mHint").textContent = center.months.some(m => m.status === "paid")
+    ? "กดการ์ดเดือนที่มียอด เพื่อเลือกเดือนที่จะพิมพ์ใบเบิก"
+    : "ไม่มียอดค่าบริการในไฟล์ Excel จึงยังไม่มีใบเบิกให้พิมพ์";
+
+  if (sel < 0) { current = null; $("detail").style.display = "none"; renderBill(); return; }
+  const m = center.months[sel];
+  current = { no: center.no, name: center.name, key1: center.key1, key2: center.key2, extra: center.extra,
+              acc: center.key2 || center.key1,               // ใช้เป็นกุญแจเก็บสถานะอนุมัติ
+              amt: m.amt, due: m.due, period: m.period, month: m.name };
+  $("detail").style.display = "block";
+  $("tTitle").textContent = K().title(current);
+  $("tHead").innerHTML = K().head.map(x => "<th>" + esc(x) + "</th>").join("");
+  $("tRow").innerHTML = K().row(current, fmt(m.amt)).map(x => "<td>" + esc(x) + "</td>").join("");
+  $("period").value = periodToForm(m.period, m.due);
+  renderApproval();
+  renderBill();
+}
+
+function hideResult() {
+  center = null;
+  current = null;
+  $("result").style.display = "none";
+  $("itemSel").value = "";
+}
+
+/* ---------- พิมพ์ค้นหา ---------- */
+function lookupNet(inputId) {
+  const v = norm($(inputId).value);
+  const c = v ? ITEMS().find(d => norm(d.key2) === v || norm(d.key1) === v) : null;
+  if (c) { setMsg(""); show(c); }
+  else setMsg("ไม่พบข้อมูลนี้ในระบบ ตรวจสอบตัวเลข/ตัวอักษรอีกครั้ง");
+}
+
+function lookupTel() {
+  const d = digits($("telIn").value);
+  if (d.length < 4) { setMsg("พิมพ์เบอร์โทรศัพท์อย่างน้อย 4 หลัก"); return; }
+  const all = ITEMS().filter(x => digits(x.key1).includes(d));
+  const hit = all.length === 1 ? all[0] : all.find(x => digits(x.key1) === d);
+  if (hit) { setMsg(""); show(hit); }
+  else if (all.length > 1) setMsg("พบ " + all.length + " เบอร์: " + all.map(x => x.key1).join(", ") + " พิมพ์ให้ครบ หรือเลือกจากรายการด้านบน");
+  else setMsg("ไม่พบเบอร์นี้ในระบบ");
+}
+
+$("accBtn").onclick = () => lookupNet("accIn");
+$("svcBtn").onclick = () => lookupNet("svcIn");
+$("telBtn").onclick = lookupTel;
+
+["accIn", "svcIn"].forEach(id => {
+  const other = id === "accIn" ? "svcIn" : "accIn";
+  $(id).addEventListener("keydown", e => { if (e.key === "Enter") lookupNet(id); });
+  $(id).addEventListener("input", () => {
+    if ($(id).value) $(other).value = "";            // พิมพ์ช่องหนึ่ง ล้างอีกช่อง
+    setMsg("");
+    if (!$(id).value.trim()) hideResult();           // ลบเลขจนว่าง -> ซ่อนผลลัพธ์
+  });
+});
+$("telIn").addEventListener("keydown", e => { if (e.key === "Enter") lookupTel(); });
+$("telIn").addEventListener("input", () => {
+  setMsg("");
+  if (!$("telIn").value.trim()) hideResult();
+});
+
+/* ---------- เลือกจากรายการ ---------- */
+$("itemSel").onchange = () => {
+  const v = $("itemSel").value;
+  ["accIn", "svcIn", "telIn"].forEach(id => { $(id).value = ""; });
+  setMsg("");
+  if (v === "") hideResult(); else show(ITEMS()[+v]);
+};
+
+function fillItems() {
+  const sel = $("itemSel");
+  sel.innerHTML = "";
+  const first = document.createElement("option");
+  first.value = ""; first.textContent = "-- เลือก --";
+  sel.appendChild(first);
+  ITEMS().forEach((it, i) => {
+    const o = document.createElement("option");
+    o.value = String(i); o.textContent = K().option(it);
+    sel.appendChild(o);
+  });
+  $("itemLabel").textContent = K().pickLabel(ITEMS().length);
+}
+
+/* ---------- เปลี่ยนเรื่องที่เบิก ---------- */
+async function setKind(k) {
+  kind = k;
+  $("kindSel").value = k;
+  hideResult();
+  setMsg("");
+  ["accIn", "svcIn", "telIn"].forEach(id => { $(id).value = ""; });
+  $("searchNet").style.display   = k === "net" ? "block" : "none";
+  $("searchPhone").style.display = k === "phone" ? "block" : "none";
+  $("printBtn").style.display    = k === "net" ? "" : "none";     // ใบรายงานแบบเดิมใช้กับอินเตอร์เน็ตเท่านั้น
+  await ensureLoaded(k);
+  fillItems();
+}
+$("kindSel").onchange = () => setKind($("kindSel").value);
+
+/* =========================================================
+   4. แปลงตัวเลขเป็นตัวอักษรไทย (บาท)
+   ========================================================= */
+const DIGITS = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+const UNITS  = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน"];
+
+function thaiNumber(n) {
+  if (n === 0) return "";
+  if (n >= 1e6) return thaiNumber(Math.floor(n / 1e6)) + "ล้าน" + thaiNumber(n % 1e6);
+  const s = String(n);
+  let r = "";
+  for (let i = 0; i < s.length; i++) {
+    const d = +s[i], p = s.length - i - 1;
+    if (!d) continue;
+    if (p === 1)      r += (d === 1 ? "" : d === 2 ? "ยี่" : DIGITS[d]) + "สิบ";
+    else if (p === 0) r += (d === 1 && s.length > 1 ? "เอ็ด" : DIGITS[d]);
+    else              r += DIGITS[d] + UNITS[p];
+  }
+  return r;
+}
+
+function bahtText(a, full) {
+  const b = Math.floor(a);
+  const s = Math.round((a - b) * 100);
+  return thaiNumber(b) + "บาท" + (s ? thaiNumber(s) + "สตางค์" : (full ? "ถ้วน" : ""));
+}
+
+/* =========================================================
+   4.1 รายชื่อผู้จัดทำ / ผู้อนุมัติ (เลือกจากรายการ ไม่ต้องพิมพ์)
+   !! เพิ่ม/แก้รายชื่อที่นี่: บรรทัดละ 1 คน { name: "ชื่อ", pos: "ตำแหน่ง" }
+   ========================================================= */
+const SIGNERS = {
+  makers: [
+    { name: "นางสาวเสาวลักษณ์ ปิยไพร",     pos: "เจ้าหน้าที่รัฐกิจสัมพันธ์" },
+    { name: "นางสาวเพชรรัตน์ มะโนนิน",     pos: "เจ้าหน้าที่บริหารงาน GPS." }
+  ],
+  approvers: [
+    { name: "นายเมธี จันทร์งาม",           pos: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์" },
+    { name: "นางโสภิดา คำอินทร์",           pos: "ผู้จัดการส่วนสำนักงานจัดหาวัตถุดิบ" }
+  ]
+};
+
+function setupPicker(selId, posId, list, storeKey) {
+  const sel = $(selId);
+  list.forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  let saved = 0;                                          // จำคนที่เลือกล่าสุดในเครื่องนี้
+  try { saved = +localStorage.getItem(storeKey) || 0; } catch (e) {}
+  sel.value = list[saved] ? saved : 0;
+  const update = () => {
+    $(posId).textContent = "ตำแหน่ง: " + list[sel.value].pos;
+    try { localStorage.setItem(storeKey, sel.value); } catch (e) {}
+  };
+  sel.onchange = update;
+  update();
+}
+setupPicker("makerSel", "makerPosTxt", SIGNERS.makers, "pick_maker2");
+setupPicker("apprSel", "apprPosTxt", SIGNERS.approvers, "pick_appr2");
+
+/* รอให้ฟอนต์โหลดก่อนสั่งพิมพ์ (กันตัวอักษรเพี้ยนในหน้าตัวอย่าง) */
+function printNow() {
+  const load = w => document.fonts ? document.fonts.load(w + ' 12pt "Sarabun"', "กขA1") : Promise.resolve();
+  Promise.all([load(400), load(700)]).catch(() => {}).then(() => window.print());
+}
+
+/* =========================================================
+   5. พิมพ์ใบรายงานการขอเบิกค่าใช้จ่าย
+   ========================================================= */
+$("printBtn").onclick = () => {
+  if (!current) return;
+  document.body.dataset.print = "report";
+  $("fPeriod").textContent   = $("period").value;
+  $("fName").textContent     = (current.name.startsWith("ศูนย์") ? "" : " ") + current.name;
+  $("fAmt").textContent      = fmt(current.amt);
+  $("fAmt2").textContent     = fmt(current.amt);
+  $("fWords").textContent    = bahtText(current.amt);
+  const mk = SIGNERS.makers[$("makerSel").value], ap = SIGNERS.approvers[$("apprSel").value];
+  $("fMaker").textContent    = "(" + mk.name + ")";
+  $("fMakerPos").textContent = "(" + mk.pos + ")";
+  $("fAppr").textContent     = "(" + ap.name + ")";
+  $("fApprPos").textContent  = "(" + ap.pos + ")";
+  printNow();
+};
+
+/* =========================================================
+   5.1 บันทึกภายใน (แบบฟอร์ม FM-50000-02)
+   ข้อความของแต่ละเรื่อง (อินเตอร์เน็ต / โทรศัพท์) แก้ได้ที่ KINDS[...].memo ด้านบน
+   ข้อความที่ใช้ร่วมกันแก้ได้ที่ MEMO
+   ========================================================= */
+const MEMO = {
+  from: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
+  to:   "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
+  form: "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566"
+};
+const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+                     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+function thaiLongDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  return m ? (+m[3]) + " " + THAI_MONTHS[+m[2] - 1] + " " + (+m[1] + 543) : "";
+}
+(() => { const d = new Date(); $("memoDate").value = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); })();
+
+function memoTable(cfg, c, amt, year) {
+  const n = cfg.cols.length;
+  let h = "<colgroup>" + cfg.widths.map(w => '<col style="width:' + w + '%">').join("") + "</colgroup>";
+  h += '<tr><th colspan="' + (n - cfg.monthSpan) + '">' + esc(cfg.tableTitle + " " + year) + '</th>' +
+       '<th colspan="' + cfg.monthSpan + '">' + esc(c.month) + "</th></tr>";
+  h += "<tr>" + cfg.cols.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr>";
+  h += "<tr>" + cfg.cells(c, amt).map(x => "<td>" + esc(x) + "</td>").join("") + "</tr>";
+  if (cfg.total) h += '<tr><th colspan="' + (n - 2) + '">รวม</th><td colspan="2">' + esc(amt) + "</td></tr>";
+  return h;
+}
+
+$("printMemo").onclick = () => {
+  if (!current) return;
+  document.body.dataset.print = "memo";
+  const cfg = K().memo;
+  const mk = SIGNERS.makers[$("makerSel").value], ap = SIGNERS.approvers[$("apprSel").value];
+  const year = current.due.split("/")[2] || "";
+  const amt = fmt(current.amt);
+
+  $("mDate").textContent    = thaiLongDate($("memoDate").value);
+  $("mSubject").innerHTML   = "<div>" + cfg.subject(current) + "</div>";
+  $("mFrom").textContent    = MEMO.from;
+  $("mTo").textContent      = MEMO.to;
+  $("mFor").textContent     = cfg.purpose;
+  $("mIntro").textContent   = cfg.intro;
+  $("mmTb").innerHTML       = memoTable(cfg, current, amt, year);
+  $("mPara").innerHTML      = esc(MEMO.from) + " ขอเบิกค่าใช้บริการ" + esc(cfg.word) + " จำนวน 1 เลขหมาย รอบค่าใช้บริการ <b>เดือน " +
+                              esc(current.month) + " " + esc(year) + "</b> เป็นจำนวนเงินทั้งสิ้น <b>" + amt + " บาท</b> <b>(" +
+                              bahtText(current.amt, true) + ")</b> ตามเอกสารที่แนบท้ายนี้";
+  $("mClose").textContent   = cfg.close;
+  $("mMaker").textContent   = "(" + mk.name + ")";
+  $("mMakerPos").textContent = mk.pos;
+  $("mAppr").textContent    = "(" + ap.name + ")";
+  $("mApprPos").textContent = ap.pos;
+  $("mFoot").textContent    = MEMO.form;
+  printNow();
+};
+
+/* =========================================================
+   6. บทบาทและการอนุมัติ: ผู้อนุมัติ 1, ผู้อนุมัติ 2, บัญชี
+   !! แก้ชื่อ / ตำแหน่ง / PIN ของแต่ละคนที่ ROLES ด้านล่าง
+   หมายเหตุ: PIN อยู่ในโค้ดหน้าเว็บ ใครเปิดดูโค้ดก็เห็น ใช้กันกดผิดได้ แต่ไม่ใช่ความปลอดภัยจริง
+   สถานะอนุมัติเก็บในเบราว์เซอร์ของเครื่องที่กด (ไม่ซิงก์ข้ามเครื่อง)
+   ========================================================= */
+const ROLES = {
+  approver1:  { label: "ผู้อนุมัติ 1", name: "นางโสภิดา คำอินทร์", pos: "ผู้จัดการส่วนสำนักงานจัดหาวัตถุดิบ", pin: "1111" },
+  approver2:  { label: "ผู้อนุมัติ 2", name: "ชื่อผู้อนุมัติ 2", pos: "ตำแหน่งผู้อนุมัติ 2",                       pin: "2222" },
+  accountant: { label: "บัญชี",        name: "ชื่อเจ้าหน้าที่บัญชี", pos: "เจ้าหน้าที่บัญชี",             pin: "3333" }
+};
+const ROLE_ORDER = ["approver1", "approver2", "accountant"];
+
+let role = null;
+try { role = sessionStorage.getItem("role"); } catch (e) { /* ไม่มี sessionStorage */ }
+if (!ROLES[role]) role = null;
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const stamp = iso => iso ? new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "";
+
+function loadApprovals() {
+  try { return JSON.parse(localStorage.getItem("approvals_v1") || "{}"); } catch (e) { return {}; }
+}
+function saveApprovals(a) {
+  try { localStorage.setItem("approvals_v1", JSON.stringify(a)); }
+  catch (e) { setMsg("บันทึกสถานะไม่ได้ (เบราว์เซอร์ปิดการเก็บข้อมูล)"); }
+}
+const recKey = d => d.acc + "|" + d.due;                    // 1 รายการ = ศูนย์ + กำหนดชำระ
+const getRec = d => loadApprovals()[recKey(d)] || {};
+function setRec(d, patch) {
+  const a = loadApprovals();
+  a[recKey(d)] = Object.assign({}, a[recKey(d)], patch);
+  saveApprovals(a);
+}
+
+/* ---------- เข้าสู่ระบบ ---------- */
+ROLE_ORDER.forEach(k => {
+  const o = document.createElement("option");
+  o.value = k; o.textContent = ROLES[k].label;
+  $("roleSel").appendChild(o);
+});
+
+function renderLogin() {
+  $("loginBox").style.display = role ? "none" : "block";
+  $("whoBox").style.display   = role ? "flex" : "none";
+  if (role) $("whoName").textContent = ROLES[role].label + " (" + ROLES[role].name + ")";
+  renderApproval();
+}
+
+$("loginBtn").onclick = () => {
+  const r = $("roleSel").value;
+  if (!r || $("pinIn").value !== ROLES[r].pin) { setMsg("บทบาทหรือ PIN ไม่ถูกต้อง"); return; }
+  role = r;
+  try { sessionStorage.setItem("role", r); } catch (e) {}
+  $("pinIn").value = "";
+  setMsg("");
+  renderLogin();
+};
+$("pinIn").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+$("logoutBtn").onclick = () => {
+  role = null;
+  try { sessionStorage.removeItem("role"); } catch (e) {}
+  renderLogin();
+};
+
+/* ---------- แผงสถานะการอนุมัติ ---------- */
+function renderApproval() {
+  if (!current) return;
+  const rec = getRec(current);
+  const both = !!(rec.approver1 && rec.approver2);
+
+  $("apprGrid").innerHTML = ROLE_ORDER.map(k => {
+    const done = rec[k];
+    const isAcc = k === "accountant";
+    const state = done
+      ? (isAcc ? "💰 จ่ายแล้ว " : "✅ อนุมัติแล้ว ") + stamp(done)
+      : "⏳ รอ" + (isAcc ? "จ่ายเงิน" : "อนุมัติ");
+    return '<div class="appr-row' + (done ? " ok" : "") + '"><span>' +
+           esc(ROLES[k].label + " · " + ROLES[k].name) + "</span><b>" + state + "</b></div>";
+  }).join("");
+
+  const box = $("apprActions");
+  box.innerHTML = "";
+  const addBtn = (text, cls, fn) => {
+    const b = document.createElement("button");
+    b.textContent = text; if (cls) b.className = cls; b.onclick = fn;
+    box.appendChild(b);
+  };
+  const addNote = text => {
+    const p = document.createElement("div");
+    p.className = "appr-note"; p.textContent = text;
+    box.appendChild(p);
+  };
+  const act = patch => () => { setRec(current, patch); renderApproval(); };
+
+  if (!role) { addNote("เข้าสู่ระบบด้านบน เพื่ออนุมัติหรือบันทึกการจ่ายเงิน"); return; }
+
+  if (role === "accountant") {
+    if (rec.accountant)  addBtn("ยกเลิกสถานะจ่ายแล้ว", "alt", act({ accountant: null }));
+    else if (both)       addBtn("💰 บันทึกว่าจ่ายแล้ว", "", act({ accountant: new Date().toISOString() }));
+    else                 addNote("ต้องรอผู้อนุมัติครบ 2 คนก่อน จึงบันทึกการจ่ายได้");
+  } else if (rec[role]) {
+    if (rec.accountant)  addNote("บัญชีบันทึกจ่ายแล้ว จึงยกเลิกการอนุมัติไม่ได้");
+    else                 addBtn("ยกเลิกการอนุมัติของฉัน", "alt", act({ [role]: null }));
+  } else {
+    addBtn("✅ อนุมัติรายการนี้", "", act({ [role]: new Date().toISOString() }));
+  }
+}
+
+renderLogin();
+
+(async () => {
+  await setKind("net");
+  const acc = new URLSearchParams(location.search).get("acc");   // เปิดผ่านลิงก์ ?acc=รหัสลูกค้า ได้
+  if (acc) { $("accIn").value = acc; lookupNet("accIn"); }
+})();
+</script>
+</body>
+</html>
